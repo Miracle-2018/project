@@ -151,3 +151,58 @@ def tipo_trabalho(job_id: int = typer.Argument(..., help="ID do trabalho")):
         typer.echo(determinar_regime(job).lower())
     except requests.RequestException as erro:
         typer.echo(f"Erro: {erro}", err=True)
+        
+#d)
+@app.command("skills")
+def contar_skills(
+    data_inicio: str = typer.Argument(..., help="Data início (formato: YYYY-MM-DD)"),
+    data_fim: str = typer.Argument(..., help="Data fim (formato: YYYY-MM-DD)"),
+):
+    
+    skills = [
+        "Python", "Java", "JavaScript", "TypeScript", "C#", "C\\+\\+", "PHP", "Ruby", "Go", "Rust",
+        "React", "Angular", "Vue", "Node.js", "Django", "Flask", "Spring", "Laravel",
+        "SQL", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Oracle",
+        "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Jenkins", "GitLab", "GitHub",
+        "Machine Learning", "AI", "Data Science", "Deep Learning", "TensorFlow", "PyTorch",
+        "Agile", "Scrum", "DevOps", "CI/CD", "Microservices", "REST", "GraphQL",
+        "Linux", "Git", "Terraform", "Ansible"
+    ]
+    
+    try:
+        response = requests.get(f"{LIST_API_URL}?api_key={API_KEY}&limit=100", 
+                               headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+        trabalhos = response.json().get("results", [])
+        print(trabalhos)
+        
+        dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d")
+        dt_fim = datetime.strptime(data_fim, "%Y-%m-%d")
+        
+        trabalhos_filtrados = [
+            t for t in trabalhos 
+            if t.get("publishedAt") and 
+            dt_inicio <= datetime.strptime(t["publishedAt"].split(" ")[0].split("T")[0], "%Y-%m-%d") <= dt_fim
+        ]
+        
+        if not trabalhos_filtrados:
+            typer.echo("[]")
+            return
+        
+        skill_count = {skill.replace("\\+\\+", "++"): 0 for skill in skills}
+        
+        for t in trabalhos_filtrados:
+            texto = t.get("body", "") + " " + t.get("title", "")
+            for skill in skills:
+                matches = re.findall(rf'\b{skill}\b', texto, re.IGNORECASE)
+                if matches:
+                    skill_count[skill.replace("\\+\\+", "++")] += len(matches)
+        
+        skills_ordenadas = {k: v for k, v in sorted(skill_count.items(), key=lambda x: x[1], reverse=True) if v > 0}
+        
+        typer.echo(json.dumps([skills_ordenadas], ensure_ascii=False))
+        
+    except ValueError as e:
+        typer.echo(f"Erro no formato da data. Use YYYY-MM-DD: {e}", err=True)
+    except requests.RequestException as erro:
+        typer.echo(f"Erro ao aceder à API: {erro}", err=True)
