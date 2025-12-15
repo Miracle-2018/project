@@ -77,3 +77,54 @@ def determinar_regime(job):
         result["error"] = str(e)
 
     return result
+#b)
+@app.command("statistics")
+def statistics(
+    criterio: str = typer.Argument(..., help="Critério de estatísticas (ex: zone)")
+):
+    
+    if criterio != "zone":
+        typer.echo("Critério inválido. Use: zone")
+        raise typer.Exit(code=1)
+
+    try:
+        response = requests.post(
+            GET_API_URL.replace("get.json", "list.json"),
+            headers={"User-Agent": "Mozilla/5.0"},
+            data={"api_key": API_KEY}
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        jobs = data.get("results", [])
+
+        stats = {}
+
+        for job in jobs:
+            
+            tipo_trabalho = job.get("title", "Desconhecido")
+
+            locations = job.get("locations", [])
+            if locations:
+                zona = locations[0].get("name", "Desconhecida")
+            else:
+                zona = "Desconhecida"
+
+            key = (zona, tipo_trabalho)
+            stats[key] = stats.get(key, 0) + 1
+
+        rows = []
+        for (zona, tipo), total in stats.items():
+            rows.append({
+                "Zona": zona,
+                "Tipo de Trabalho": tipo,
+                "Nº de vagas": total
+            })
+
+        filename = "estatisticas_vagas_por_zona.csv"
+        export_to_csv(filename, rows)
+
+        typer.echo("Ficheiro de exportação criado com sucesso")
+
+    except requests.RequestException as e:
+        typer.echo(f"Erro ao obter dados: {e}", err=True)
