@@ -113,3 +113,41 @@ def procurar_part_time(
 
     except requests.RequestException as erro:
         typer.echo(f"Erro ao aceder à API: {erro}", err=True)
+        
+#c)
+
+GET_API_URL = "https://api.itjobs.pt/job/get.json"
+
+def determinar_regime(job):
+    """Determina o regime de trabalho usando regex e campos da API"""
+    if job.get("allowRemote"):
+        return "Remoto"
+    
+    texto = job.get("body", "") + " " + job.get("title", "")
+    
+    if re.search(r"[Hh][ií]brido|[Hh]ybrid", texto):
+        return "Híbrido"
+    elif re.search(r"[Rr]emoto|[Rr]emote|[Tt]eletrabalho", texto):
+        return "Remoto"
+    elif re.search(r"[Pp]resencial|[Oo]n-?site|[Ee]scritório|[Oo]ffice", texto):
+        return "Presencial"
+    
+    return "Não especificado"
+
+@app.command("type")
+def tipo_trabalho(job_id: int = typer.Argument(..., help="ID do trabalho")):
+    """Retorna o tipo de regime de trabalho de um job"""
+    try:
+        response = requests.post(GET_API_URL, 
+                                headers={"User-Agent": "Mozilla/5.0"}, 
+                                data={"api_key": API_KEY, "id": job_id})
+        response.raise_for_status()
+        job = response.json()
+        
+        if not job or job.get("id") is None:
+            typer.echo("not found")
+            return
+        
+        typer.echo(determinar_regime(job).lower())
+    except requests.RequestException as erro:
+        typer.echo(f"Erro: {erro}", err=True)
