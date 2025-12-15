@@ -206,3 +206,26 @@ def contar_skills(
         typer.echo(f"Erro no formato da data. Use YYYY-MM-DD: {e}", err=True)
     except requests.RequestException as erro:
         typer.echo(f"Erro ao aceder à API: {erro}", err=True)
+        
+#e)
+def exportar_csv(trabalhos, filename):
+
+    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['titulo', 'empresa', 'descricao', 'data_publicacao', 'salario', 'localizacao'])
+
+        for trabalho in trabalhos:
+            descricao_raw = trabalho.get('body', 'N/A')
+            descricao_limpa = re.sub(r'<[^>]+>', '', descricao_raw) 
+            descricao_limpa = descricao_limpa.strip()
+            writer.writerow([
+                trabalho.get('title', 'N/A'),
+                trabalho.get('company', {}).get('name', 'N/A'),
+                descricao_limpa[:200] + '...',
+                trabalho.get('publishedAt', 'N/A'),
+                trabalho.get('wage', 'N/A'),
+                trabalho.get('locations', [{}])[0].get('name', 'N/A')
+            ])
+
+if __name__ == "__main__":
+    app()
