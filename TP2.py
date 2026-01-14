@@ -88,22 +88,49 @@ def statistics(
         raise typer.Exit(code=1)
 
     try:
-        response = requests.post(
-            GET_API_URL.replace("get.json", "list.json"),
-            headers={"User-Agent": "Mozilla/5.0"},
-            data={"api_key": API_KEY}
-        )
-        response.raise_for_status()
+        all_jobs = []
+        page = 1
+        
+        while True:
+            typer.echo(f"Fetching page {page}...")
+            
+            response = requests.post(
+                GET_API_URL.replace("get.json", "list.json"),
+                headers={"User-Agent": "Mozilla/5.0"},
+                data={
+                    "api_key": API_KEY,
+                    "page": page
+                }
+            )
+            response.raise_for_status()
 
-        data = response.json()
-        jobs = data.get("results", [])
+            data = response.json()
+            jobs = data.get("results", [])
+            
+
+            if not jobs:
+                break
+            
+            all_jobs.extend(jobs)
+            
+
+            total = data.get("total", 0)
+            limit = data.get("limit", 18)  # limit per page
+
+            if len(all_jobs) >= total:
+                break
+            
+            page += 1
+
+        typer.echo(f"Total jobs fetched: {len(all_jobs)}")
 
         stats = {}
 
-        for job in jobs:
-            
+        for job in all_jobs:
+            # Get job title
             tipo_trabalho = job.get("title", "Desconhecido")
 
+            # Get location/zone
             locations = job.get("locations", [])
             if locations:
                 zona = locations[0].get("name", "Desconhecida")
@@ -121,16 +148,18 @@ def statistics(
                 "Nº de vagas": total
             })
 
+        rows.sort(key=lambda x: (x["Zona"], x["Tipo de Trabalho"]))
+
         filename = "estatisticas_vagas_por_zona.csv"
         export_to_csv(filename, rows)
 
-        typer.echo("Ficheiro de exportação criado com sucesso")
+        typer.echo(f"Ficheiro de exportação criado com sucesso: {filename}")
+        typer.echo(f"Total de combinações zona/tipo: {len(rows)}")
 
     except requests.RequestException as e:
         typer.echo(f"Erro ao obter dados: {e}", err=True)
 
 
-#c
 @app.command("type")
 def tipo_trabalho(
     job_id: int = typer.Argument(..., help="ID do trabalho"),
@@ -170,7 +199,7 @@ def tipo_trabalho(
     except requests.RequestException as erro:
         typer.echo(f"Erro: {erro}", err=True)
 
-
+#c
 roles_en = [
     "Backend",
     "Embedded systems",
@@ -226,12 +255,12 @@ def list_skills(
             response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
             soup = BeautifulSoup(response.text, "lxml")
 
-            boot = soup.find_all("div", class_="col-lg-2")
-            if len(boot) < 3:
+            select = soup.find("select", {"name": "tags"})
+            if not select:
                 typer.echo("No skills section found.")
                 continue
 
-            options = boot[2].find_all("option")[1:]
+            options = select.find_all("option")[1:]
 
             skills = []
             for option in options:
@@ -239,7 +268,6 @@ def list_skills(
                 match = re.match(r"(.+?)\s*\((\d+)\)", text)
                 if match:
                     skills.append({
-                        "role": matched_role,  # para contexto no CSV
                         "skill": match.group(1),
                         "count": int(match.group(2))
                     })
@@ -249,9 +277,7 @@ def list_skills(
 
             all_top_skills.extend(top_10)
 
-            
             if not csv_out:
-                
                 json_top_10 = [
                     {"skill": s["skill"], "count": s["count"]}
                     for s in top_10
